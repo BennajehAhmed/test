@@ -1,0 +1,63 @@
+{
+  "name": "llm-chat",
+  "displayName": "LLM Chat",
+  "description": "A chat interface for LLMs in VS Code",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:llmChatView",
+    "onCommand:extension.open-chat"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "llm-chat",
+          "title": "LLM Chat",
+          "icon": "media/chat-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "llm-chat": [
+        {
+          "id": "llmChatView",
+          "name": "Chat",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "extension.open-chat",
+        "title": "Open LLM Chat",
+        "icon": {
+          "light": "media/light/chat.svg",
+          "dark": "media/dark/chat.svg"
+        }
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Chat Assistant Settings",
+      "properties": {
+        "llm-chat.model": {
+          "type": "string",
+          "default": "deepseek-ai/DeepSeek-V3-0324-Turbo",
+          "description": "Model to use for chat completions"
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "marked": "^5.1.0",
+    "highlight.js": "^11.7.0",
+    "diff": "^5.0.0"
+  }
+}
