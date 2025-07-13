@@ -1,63 +1,44 @@
 {
   "name": "llm-chat",
-  "displayName": "LLM Chat",
-  "description": "A chat interface for LLMs in VS Code",
+  "displayName": "LLM chat",
+  "description": "",
   "version": "0.1.0",
   "engines": {
     "vscode": "^1.75.0"
   },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [
-    "onView:llmChatView",
-    "onCommand:extension.open-chat"
-  ],
+  "activationEvents": [],
   "main": "./extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "llm-chat",
+          "id": "llm-chat-container",
           "title": "LLM Chat",
-          "icon": "media/chat-icon.svg"
+          "icon": "$(comment-discussion)"
         }
       ]
     },
     "views": {
-      "llm-chat": [
+      "llm-chat-container": [
         {
-          "id": "llmChatView",
+          "id": "llmChat.chatView",
           "name": "Chat",
-          "type": "webview"
+          "type": "webview",
+          "contextualTitle": "LLM Chat"
         }
       ]
     },
     "commands": [
       {
-        "command": "extension.open-chat",
-        "title": "Open LLM Chat",
-        "icon": {
-          "light": "media/light/chat.svg",
-          "dark": "media/dark/chat.svg"
-        }
+        "command": "llmChat.focus",
+        "title": "Focus LLM Chat View"
       }
-    ],
-    "configuration": {
-      "type": "object",
-      "title": "Chat Assistant Settings",
-      "properties": {
-        "llm-chat.model": {
-          "type": "string",
-          "default": "deepseek-ai/DeepSeek-V3-0324-Turbo",
-          "description": "Model to use for chat completions"
-        }
-      }
-    }
+    ]
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0"
   },
   "dependencies": {
-    "marked": "^5.1.0",
-    "highlight.js": "^11.7.0",
-    "diff": "^5.0.0"
+    "markdown-it": "^13.0.1"
   }
 }
