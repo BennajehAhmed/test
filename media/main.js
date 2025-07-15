@@ -80,7 +80,6 @@
   function renderAssistantResponse(parts) {
     const messageElement = createMessageElement("assistant");
     const contentElement = messageElement.querySelector(".message-content");
-    let hasTextContent = false;
     parts.forEach((part) => {
       if (part.type === "text") {
         const textDiv = document.createElement("div");
@@ -91,9 +90,6 @@
         appendFileBlock(part.path, part.content);
       }
     });
-    if (hasTextContent) {
-      historyElement.appendChild(messageElement);
-    }
     scrollToBottom();
   }
 
@@ -194,24 +190,20 @@
       textarea.style.height = `${textarea.scrollHeight}px`;
     });
 
-    blockElement
-      .querySelector(".copy-button")
-      .addEventListener("click", () =>
-        vscode.postMessage({
-          command: "copyToClipboard",
-          content: textarea.value,
-        })
-      );
-    blockElement
-      .querySelector(".accept-button")
-      .addEventListener("click", () =>
-        vscode.postMessage({
-          command: "acceptFile",
-          path,
-          newContent: textarea.value,
-          blockId,
-        })
-      );
+    blockElement.querySelector(".copy-button").addEventListener("click", () =>
+      vscode.postMessage({
+        command: "copyToClipboard",
+        content: textarea.value,
+      })
+    );
+    blockElement.querySelector(".accept-button").addEventListener("click", () =>
+      vscode.postMessage({
+        command: "acceptFile",
+        path,
+        newContent: textarea.value,
+        blockId,
+      })
+    );
     blockElement
       .querySelector(".cancel-button")
       .addEventListener("click", () => blockElement.remove());
