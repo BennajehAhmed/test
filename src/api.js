@@ -2,7 +2,7 @@ const vscode = require("vscode");
 const { getSystemPrompt } = require("./systemPrompt");
 
 async function getChatCompletion(messages, openDocs) {
-  const systemPrompt = getSystemPrompt(openDocs);
+  // const systemPrompt = getSystemPrompt(openDocs);
 
   // 🔽 Get model from user settings
   const config = vscode.workspace.getConfiguration("llm-chat");
@@ -13,13 +13,7 @@ async function getChatCompletion(messages, openDocs) {
 
   const requestBody = {
     model: selectedModel,
-    messages: [
-      {
-        role: "system",
-        content: systemPrompt,
-      },
-      ...messages,
-    ],
+    messages,
     stream: false,
   };
 

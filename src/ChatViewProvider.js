@@ -5,6 +5,11 @@ const fs = require("fs").promises;
 const crypto = require("crypto");
 const { getChatCompletion } = require("./api");
 const { parseLLMResponse } = require("./llmParser");
+const { extractTools } = require("./toolParser");
+const toolRunner = require("./toolRunner");
+const { getSystemPromptAgent } = require("./systemPromptAgent");
+
+const MAX_AGENT_LOOPS = 15;
 
 class ChatViewProvider {
   static viewType = "llmChat.chatView";
@@ -12,6 +17,7 @@ class ChatViewProvider {
   constructor(extensionUri) {
     this._extensionUri = extensionUri;
     this._history = [];
+    this._mode = "edit"; // 'edit' | 'agent'
   }
 
   /* ------------------------------------------------------------------ */
@@ -41,11 +47,44 @@ class ChatViewProvider {
     webviewView.onDidDispose(() => this._diffReg.dispose());
   }
 
+  async _handleSlash(slash, arg) {
+    switch (slash) {
+      case "explain":
+        // 1. Resolve file (arg can be absolute path or "selected")
+        const uri =
+          arg === "selected"
+            ? vscode.window.activeTextEditor?.document.uri
+            : vscode.Uri.file(arg);
+        if (!uri) {
+          this._view.webview.postMessage({
+            command: "llmError",
+            error: "No file or selection to explain.",
+          });
+          return;
+        }
+        // 2. Read content
+        const content = await vscode.workspace.fs.readFile(uri);
+        // 3. Push synthetic user message + auto-run
+        this._history.push({
+          role: "user",
+          content: `Explain the following code in ${uri.fsPath}:\n\n${content}`,
+        });
+        await this._handleLLMRequest();
+        break;
+    }
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Message dispatcher                                                  */
   /* ------------------------------------------------------------------ */
   async _handleMessage(message) {
     switch (message.command) {
+      case "setMode":
+        this._mode = message.mode; // 'edit' | 'agent'
+        return;
+      case "slash":
+        await this._handleSlash(message.slash, message.arg);
+        return;
       case "sendToLLM":
         this._history.push({ role: "user", content: message.text });
         await this._handleLLMRequest();
@@ -173,17 +212,94 @@ class ChatViewProvider {
   async _handleLLMRequest() {
     if (!this._view) return;
     this._view.webview.postMessage({ command: "setLoading", isLoading: true });
+
     try {
       const openDocs = this._getOpenDocuments();
-      const response = await getChatCompletion(this._history, openDocs);
-      this._history.push({ role: "assistant", content: response });
-      const parts = parseLLMResponse(response);
-      this._view.webview.postMessage({
-        command: "llmResponse",
-        parts,
-      });
+      const systemPrompt =
+        this._mode === "agent"
+          ? require("./systemPromptAgent").getSystemPromptAgent(openDocs)
+          : require("./systemPrompt").getSystemPrompt(openDocs);
+
+      // Build history for the LLM call
+      let historyToSend = [
+        { role: "system", content: systemPrompt },
+        ...this._history,
+      ];
+
+      let loops = 0;
+      const MAX_LOOPS = 15;
+
+      while (loops < MAX_LOOPS) {
+        loops++;
+
+        const raw = await getChatCompletion(historyToSend, []);
+
+        console.log(raw);
+        /* ----------  EDIT MODE  ---------- */
+        if (this._mode !== "agent") {
+          this._history.push({ role: "assistant", content: raw });
+          const parts = parseLLMResponse(raw);
+          this._view.webview.postMessage({ command: "llmResponse", parts });
+          break;
+        }
+
+        /* ----------  AGENT MODE  ---------- */
+        const { toolCalls, cleanText } =
+          require("./toolParser").extractTools(raw);
+
+        // 1. Show assistant text (without tool tags)
+        this._history.push({ role: "assistant", content: cleanText });
+        historyToSend.push({ role: "assistant", content: cleanText });
+
+        if (toolCalls.length === 0) {
+          // Final answer – render normally
+          const parts = parseLLMResponse(cleanText);
+          this._view.webview.postMessage({ command: "llmResponse", parts });
+          break;
+        }
+
+        // 2. Execute tools and push observations
+        for (const tool of toolCalls) {
+          let obs;
+          try {
+            switch (tool.type) {
+              case "readFile":
+                obs = await require("./toolRunner").readFile(tool.path);
+                break;
+              case "writeFile":
+                obs = await require("./toolRunner").writeFile(
+                  tool.path,
+                  tool.content
+                );
+                break;
+              case "runCommand":
+                obs = await require("./toolRunner").runCommand(tool.command);
+                break;
+              default:
+                throw new Error(`Unknown tool: ${tool.type}`);
+            }
+          } catch (err) {
+            obs = { error: err.message };
+          }
+
+          // Send trace to UI
+          this._view.webview.postMessage({
+            command: "agentTrace",
+            icon: "fas fa-check",
+            title: `${tool.type} result`,
+            body: JSON.stringify(obs, null, 2),
+            isError: !!obs.error,
+          });
+
+          const obsText = `<observation type="${tool.type}">${JSON.stringify(
+            obs
+          )}</observation>`;
+          this._history.push({ role: "user", content: obsText });
+          historyToSend.push({ role: "user", content: obsText });
+        }
+      }
     } catch (err) {
-      console.error("LLM Request Failed:", err);
+      console.error("LLM/Agent failed:", err);
       this._view.webview.postMessage({
         command: "llmError",
         error: err.message,
@@ -251,6 +367,9 @@ class ChatViewProvider {
         </div>
         <div id="input-area">
           <div id="input-container">
+          <button id="toggle-mode" class="button button-secondary" title="Toggle Agent/Edit Mode">
+            <i class="fas fa-robot"></i><span>Edit</span>
+          </button>
             <textarea id="input" placeholder="Ask anything..." rows="1"></textarea>
             <button id="send-button" title="Send message"><i class="fas fa-paper-plane"></i></button>
           </div>

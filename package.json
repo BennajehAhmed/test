@@ -33,12 +33,23 @@
         "command": "llmChat.focus",
         "title": "Focus LLM Chat View"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "LLM Chat",
+      "properties": {
+        "llm-chat.model": {
+          "type": "string",
+          "default": "deepseek-ai/DeepSeek-V3-0324-Turbo",
+          "description": "The model to use for the LLM chat."
+        }
+      }
+    }
   },
   "devDependencies": {
     "@types/vscode": "^1.75.0"
   },
   "dependencies": {
-    "markdown-it": "^13.0.1"
+    "markdown-it": "^13.0.1",
+    "semaphore-async-await": "^1.5.1"
   }
 }

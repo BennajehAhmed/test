@@ -22,6 +22,28 @@
     },
   });
 
+  function addAgentTrace(icon, title, body, isError = false) {
+    const id = "trace-" + Date.now();
+    const div = document.createElement("div");
+    div.className = "agent-trace" + (isError ? " error" : "");
+    div.id = id;
+    div.innerHTML = `
+    <div class="trace-header trace-toggle">
+      <i class="${icon}"></i>
+      <span>${title}</span>
+      <i class="fas fa-chevron-down"></i>
+    </div>
+    <pre class="trace-body">${body}</pre>
+  `;
+    div.querySelector(".trace-toggle").onclick = () => toggleTrace(id);
+    historyElement.appendChild(div);
+    scrollToBottom();
+  }
+
+  window.toggleTrace = (id) => {
+    document.getElementById(id).classList.toggle("trace-expanded");
+  };
+
   sendButton.addEventListener("click", sendMessage);
   clearHistoryButton.addEventListener("click", () =>
     vscode.postMessage({ command: "clearHistory" })
@@ -35,6 +57,15 @@
   inputElement.addEventListener("input", () => {
     inputElement.style.height = "auto";
     inputElement.style.height = `${Math.min(inputElement.scrollHeight, 150)}px`;
+  });
+
+  const toggleBtn = document.getElementById("toggle-mode");
+  toggleBtn.addEventListener("click", () => {
+    const nextMode =
+      toggleBtn.querySelector("span").textContent === "Edit" ? "agent" : "edit";
+    toggleBtn.querySelector("span").textContent =
+      nextMode === "agent" ? "Agent" : "Edit";
+    vscode.postMessage({ command: "setMode", mode: nextMode });
   });
 
   window.addEventListener("message", (event) => {
@@ -56,17 +87,54 @@
       case "fileAccepted":
         updateFileBlockToAccepted(data.blockId);
         break;
+      case "agentTrace":
+        addAgentTrace(data.icon, data.title, data.body, data.isError);
+        break;
     }
   });
 
   function sendMessage() {
     const text = inputElement.value.trim();
     if (!text || sendButton.disabled) return;
+
+    // --- slash-command router ---
+    if (text.startsWith("/")) {
+      const [cmd, ...rest] = text.slice(1).split(" ");
+      switch (cmd) {
+        case "explain":
+          const target = rest.join(" ").trim();
+          if (!target) {
+            appendSystemHint(
+              "Usage: `/explain path/to/file` or `/explain selected`"
+            );
+            return;
+          }
+          const payload = { command: "slash", slash: "explain", arg: target };
+          vscode.postMessage(payload);
+          appendUserMessage(text); // still show in history
+          setLoadingState(true);
+          return;
+        // TODO: add /test, /doc, etc.
+        default:
+          appendSystemHint(`Unknown slash command “/${cmd}”`);
+          return;
+      }
+    }
+    // --- end router ---
+
     appendUserMessage(text);
     vscode.postMessage({ command: "sendToLLM", text });
     inputElement.value = "";
     inputElement.style.height = "auto";
     inputElement.focus();
+  }
+
+  function appendSystemHint(msg) {
+    const el = document.createElement("div");
+    el.className = "message assistant-message";
+    el.innerHTML = `<div class="message-content">${msg}</div>`;
+    historyElement.appendChild(el);
+    scrollToBottom();
   }
 
   function setLoadingState(isLoading) {
@@ -90,6 +158,7 @@
         appendFileBlock(part.path, part.content);
       }
     });
+    historyElement.appendChild(messageElement);
     scrollToBottom();
   }
 

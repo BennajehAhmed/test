@@ -498,3 +498,51 @@ body {
   outline: none;
   box-shadow: 0 0 0 2px var(--accent);
 }
+
+/* ======= Agent Trace ======= */
+.agent-trace {
+  background: var(--bg-tertiary);
+  border-left: 4px solid var(--accent);
+  margin: 8px 0;
+  padding: 8px 12px;
+  font-size: 0.85em;
+  font-family: var(--font-mono);
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+}
+.agent-trace.error {
+  border-left-color: var(--error);
+}
+.trace-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+/* ======= Collapsible agent trace ======= */
+.trace-toggle {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.trace-toggle i:last-child {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+.trace-expanded > .trace-toggle i:last-child {
+  transform: rotate(180deg);
+}
+.trace-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+  white-space: pre-wrap; /* keep newlines but wrap words */
+  word-break: break-all; /* break long paths aggressively */
+  overflow-wrap: anywhere; /* final safety for huge tokens */
+}
+.trace-expanded .trace-body {
+  max-height: 1000px;
+}
