@@ -36,6 +36,7 @@ async function getChatCompletion(messages, openDocs) {
     }
 
     const data = await response.json();
+    console.log(data);
     return data.choices[0].message.content;
   } catch (error) {
     console.error("Error fetching chat completion:", error);

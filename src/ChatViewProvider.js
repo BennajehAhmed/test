@@ -217,63 +217,78 @@ class ChatViewProvider {
       const openDocs = this._getOpenDocuments();
       const systemPrompt =
         this._mode === "agent"
-          ? require("./systemPromptAgent").getSystemPromptAgent(openDocs)
+          ? getSystemPromptAgent(openDocs)
           : require("./systemPrompt").getSystemPrompt(openDocs);
 
-      // Build history for the LLM call
       let historyToSend = [
         { role: "system", content: systemPrompt },
         ...this._history,
       ];
 
-      let loops = 0;
-      const MAX_LOOPS = 15;
+      if (this._mode !== "agent") {
+        const raw = await getChatCompletion(historyToSend, []);
+        this._history.push({ role: "assistant", content: raw });
+        const parts = parseLLMResponse(raw);
+        this._view.webview.postMessage({ command: "llmResponse", parts });
+        return;
+      }
 
-      while (loops < MAX_LOOPS) {
+      // Agent mode
+      let loops = 0;
+      // NEW constant
+      const MAX_AGENT_LOOPS = 15;
+
+      // inside _handleLLMRequest
+      while (loops < MAX_AGENT_LOOPS) {
         loops++;
 
         const raw = await getChatCompletion(historyToSend, []);
 
-        console.log(raw);
-        /* ----------  EDIT MODE  ---------- */
-        if (this._mode !== "agent") {
-          this._history.push({ role: "assistant", content: raw });
-          const parts = parseLLMResponse(raw);
-          this._view.webview.postMessage({ command: "llmResponse", parts });
-          break;
+        const { plan, toolCalls, thoughts } = extractTools(raw);
+
+        if (thoughts) {
+          this._view.webview.postMessage({
+            command: "agentThought",
+            thought: thoughts,
+          });
         }
 
-        /* ----------  AGENT MODE  ---------- */
-        const { toolCalls, cleanText } =
-          require("./toolParser").extractTools(raw);
+        // push ONCE
+        this._history.push({ role: "assistant", content: raw });
+        historyToSend.push({ role: "assistant", content: raw });
 
-        // 1. Show assistant text (without tool tags)
-        this._history.push({ role: "assistant", content: cleanText });
-        historyToSend.push({ role: "assistant", content: cleanText });
-
-        if (toolCalls.length === 0) {
-          // Final answer – render normally
-          const parts = parseLLMResponse(cleanText);
-          this._view.webview.postMessage({ command: "llmResponse", parts });
-          break;
+        if (plan) {
+          // Only send to web-view; NOT rendered again later
+          this._view.webview.postMessage({ command: "agentPlan", plan });
         }
 
-        // 2. Execute tools and push observations
+        if (toolCalls.length !== 0) break;
+
         for (const tool of toolCalls) {
           let obs;
           try {
+            this._view.webview.postMessage({
+              command: "agentTrace",
+              icon: "fas fa-cogs",
+              title: `Running: ${tool.type}`,
+              body:
+                tool.type === "writeFile"
+                  ? `Path: ${tool.path}`
+                  : `Command: ${tool.command || tool.path}`,
+            });
+
             switch (tool.type) {
               case "readFile":
-                obs = await require("./toolRunner").readFile(tool.path);
+                obs = await toolRunner.readFile(tool.path);
                 break;
               case "writeFile":
-                obs = await require("./toolRunner").writeFile(
-                  tool.path,
-                  tool.content
-                );
+                obs = await toolRunner.writeFile(tool.path, tool.content);
                 break;
               case "runCommand":
-                obs = await require("./toolRunner").runCommand(tool.command);
+                obs = await toolRunner.runCommand(tool.command);
+                break;
+              case "list_directory":
+                obs = await toolRunner.list_directory(tool.path);
                 break;
               default:
                 throw new Error(`Unknown tool: ${tool.type}`);
@@ -282,7 +297,12 @@ class ChatViewProvider {
             obs = { error: err.message };
           }
 
-          // Send trace to UI
+          const obsText = `<observation type="${tool.type}">${JSON.stringify(
+            obs
+          )}</observation>`;
+          this._history.push({ role: "user", content: obsText });
+          historyToSend.push({ role: "user", content: obsText });
+
           this._view.webview.postMessage({
             command: "agentTrace",
             icon: "fas fa-check",
@@ -290,12 +310,6 @@ class ChatViewProvider {
             body: JSON.stringify(obs, null, 2),
             isError: !!obs.error,
           });
-
-          const obsText = `<observation type="${tool.type}">${JSON.stringify(
-            obs
-          )}</observation>`;
-          this._history.push({ role: "user", content: obsText });
-          historyToSend.push({ role: "user", content: obsText });
         }
       }
     } catch (err) {

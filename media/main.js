@@ -40,6 +40,42 @@
     scrollToBottom();
   }
 
+  function renderAgentPlan(plan) {
+    const id = "plan-" + Date.now();
+    const div = document.createElement("div");
+    div.className = "agent-plan";
+    div.id = id;
+    div.innerHTML = `
+    <div class="plan-header trace-toggle">
+      <i class="fas fa-tasks"></i>
+      <span>Plan</span>
+      <i class="fas fa-chevron-down"></i>
+    </div>
+    <div class="plan-body">${md.render(plan)}</div>
+  `;
+    div.querySelector(".trace-toggle").onclick = () => toggleTrace(id);
+    historyElement.appendChild(div);
+    scrollToBottom();
+  }
+
+  function renderAgentThought(thought) {
+    const id = "thought-" + Date.now();
+    const div = document.createElement("div");
+    div.className = "agent-thought";
+    div.id = id;
+    div.innerHTML = `
+    <div class="thought-header trace-toggle">
+      <i class="fas fa-brain"></i>
+      <span>Thought</span>
+      <i class="fas fa-chevron-down"></i>
+    </div>
+    <div class="thought-body">${md.render(thought)}</div>
+  `;
+    div.querySelector(".trace-toggle").onclick = () => toggleTrace(id);
+    historyElement.appendChild(div);
+    scrollToBottom();
+  }
+
   window.toggleTrace = (id) => {
     document.getElementById(id).classList.toggle("trace-expanded");
   };
@@ -89,6 +125,12 @@
         break;
       case "agentTrace":
         addAgentTrace(data.icon, data.title, data.body, data.isError);
+        break;
+      case "agentPlan":
+        renderAgentPlan(data.plan);
+        break;
+      case "agentThought":
+        renderAgentThought(data.thought);
         break;
     }
   });

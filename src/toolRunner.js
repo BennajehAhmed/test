@@ -50,6 +50,16 @@ const toolRunner = {
       shellSema.release();
     }
   },
+
+  async list_directory(rawPath) {
+    const dirPath = safePath(rawPath);
+    const entries = await vscode.workspace.fs.readDirectory(
+      vscode.Uri.file(dirPath)
+    );
+    return entries
+      .map(([name, type]) => (type === 2 ? `${name}/` : name))
+      .join("\n");
+  },
 };
 
 module.exports = toolRunner;
